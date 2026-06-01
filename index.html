@@ -157,6 +157,11 @@
     let questionNumber = 1;
     let bassSynth = null;
 
+    const defaultConfig = {
+      defaultSelectionNotes: ["G2", "A2", "B2", "F3", "G3"],
+      defaultRangeNotes: ["G2", "G3"]
+    };
+
     const fromSelect = document.getElementById("fromNote");
     const toSelect = document.getElementById("toNote");
     const noteCheckboxes = document.getElementById("noteCheckboxes");
@@ -173,8 +178,43 @@
       `;
     });
 
-    fromSelect.value = "G2";
-    toSelect.value = "G3";
+    applyConfig(defaultConfig);
+    loadConfig();
+
+    async function loadConfig() {
+      try {
+        const response = await fetch("config.json");
+        if (!response.ok) return;
+
+        const config = await response.json();
+        applyConfig({
+          ...defaultConfig,
+          ...config
+        });
+      } catch (error) {
+        console.warn("No se pudo cargar config.json. Se usará la configuración por defecto.", error);
+      }
+    }
+
+    function applyConfig(config) {
+      const [fromNote, toNote] = config.defaultRangeNotes || [];
+
+      if (notes.includes(fromNote)) {
+        fromSelect.value = fromNote;
+      }
+
+      if (notes.includes(toNote)) {
+        toSelect.value = toNote;
+      }
+
+      const selectedDefaults = new Set(
+        (config.defaultSelectionNotes || []).filter(note => notes.includes(note))
+      );
+
+      document.querySelectorAll("#noteCheckboxes input").forEach(input => {
+        input.checked = selectedDefaults.has(input.value);
+      });
+    }
 
     function setMode(newMode) {
       mode = newMode;
@@ -289,7 +329,7 @@
       if (!note) return;
 
       await Tone.start();
-      getBassSynth().triggerAttackRelease(note, "2n");
+      getBassSynth().triggerAttackRelease(note, "1n");
     }
 
     function getBassSynth() {
@@ -305,7 +345,7 @@
           attack: 0.015,
           decay: 0.18,
           sustain: 0.45,
-          release: 0.9
+          release: 1.2
         },
         filter: {
           type: "lowpass",
@@ -316,7 +356,7 @@
           attack: 0.01,
           decay: 0.25,
           sustain: 0.25,
-          release: 0.8,
+          release: 1.1,
           baseFrequency: 80,
           octaves: 3.2
         }
