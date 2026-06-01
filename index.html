@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quiz auditivo - Bajo 5 cuerdas</title>
+  <script src="https://cdn.jsdelivr.net/npm/tone@14.8.49/build/Tone.js"></script>
+  <style>
+    body {
+      font-family: system-ui, sans-serif;
+      background: #111827;
+      color: white;
+      margin: 0;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 720px;
+      margin: auto;
+      background: #1f2937;
+      padding: 24px;
+      border-radius: 16px;
+    }
+
+    h1, h2 {
+      text-align: center;
+    }
+
+    button, select {
+      font-size: 16px;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: none;
+      margin: 6px;
+    }
+
+    button {
+      cursor: pointer;
+      background: #2563eb;
+      color: white;
+    }
+
+    button:hover {
+      background: #1d4ed8;
+    }
+
+    .note-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
+      gap: 8px;
+      margin: 16px 0;
+    }
+
+    label {
+      background: #374151;
+      padding: 8px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .options button {
+      width: 30%;
+      min-width: 90px;
+      background: #4b5563;
+    }
+
+    .feedback {
+      margin-top: 20px;
+      padding: 16px;
+      background: #374151;
+      border-radius: 12px;
+      line-height: 1.5;
+    }
+
+    .hidden {
+      display: none;
+    }
+
+    .play {
+      font-size: 42px;
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      display: block;
+      margin: 24px auto;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Quiz auditivo para bajo de 5 cuerdas</h1>
+
+    <section id="setup">
+      <h2>Configurar práctica</h2>
+
+      <p>Escoge cómo quieres seleccionar las notas:</p>
+
+      <button onclick="setMode('range')">Por rango</button>
+      <button onclick="setMode('manual')">Selección manual</button>
+
+      <div id="rangeMode">
+        <h3>Seleccionar por rango</h3>
+        <label>Desde:</label>
+        <select id="fromNote"></select>
+
+        <label>Hasta:</label>
+        <select id="toNote"></select>
+      </div>
+
+      <div id="manualMode" class="hidden">
+        <h3>Seleccionar notas manualmente</h3>
+        <div id="noteCheckboxes" class="note-grid"></div>
+      </div>
+
+      <button onclick="startQuiz()">Empezar quiz</button>
+    </section>
+
+    <section id="quiz" class="hidden">
+      <h2 id="questionTitle">Pregunta</h2>
+
+      <button class="play" onclick="playCurrentNote()">▶</button>
+
+      <p style="text-align:center;">¿Qué nota escuchaste?</p>
+
+      <div id="options" class="options" style="text-align:center;"></div>
+
+      <div id="feedback" class="feedback hidden"></div>
+
+      <div style="text-align:center;">
+        <button id="nextButton" class="hidden" onclick="nextQuestion()">Siguiente</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const notes = [
+      "B0","C1","C#1","D1","D#1","E1","F1","F#1","G1","G#1","A1","A#1",
+      "B1","C2","C#2","D2","D#2","E2","F2","F#2","G2","G#2","A2","A#2",
+      "B2","C3","C#3","D3","D#3","E3","F3","F#3","G3","G#3","A3","A#3",
+      "B3","C4","C#4","D4","D#4","E4","F4","F#4","G4"
+    ];
+
+    const explanations = {
+      "B0": "B0 es la nota más grave típica de un bajo de 5 cuerdas. Suena muy profunda, pesada y oscura.",
+      "E1": "E1 es la cuarta cuerda de un bajo estándar. Es grave, estable y muy usada como referencia.",
+      "G2": "G2 está en un registro grave-medio. Suena sobria, estable y con cuerpo.",
+      "A2": "A2 está un tono por encima de G2. Se siente un poco más clara y menos pesada.",
+      "B2": "B2 es más aguda que G2 y A2. Tiene más definición y algo más de brillo.",
+      "F3": "F3 está en un registro medio. Suena más presente y menos grave que las notas de la octava 2.",
+      "G3": "G3 es una octava más aguda que G2. Conserva el color de sol, pero suena más brillante.",
+      "G4": "G4 es una de las notas más agudas disponibles en un bajo de 5 cuerdas de 24 trastes. Suena clara, brillante y ligera."
+    };
+
+    let mode = "range";
+    let selectedNotes = [];
+    let currentNote = null;
+    let questionNumber = 1;
+    let bassSynth = null;
+
+    const fromSelect = document.getElementById("fromNote");
+    const toSelect = document.getElementById("toNote");
+    const noteCheckboxes = document.getElementById("noteCheckboxes");
+
+    notes.forEach(note => {
+      fromSelect.innerHTML += `<option value="${note}">${note}</option>`;
+      toSelect.innerHTML += `<option value="${note}">${note}</option>`;
+
+      noteCheckboxes.innerHTML += `
+        <label>
+          <input type="checkbox" value="${note}" />
+          ${note}
+        </label>
+      `;
+    });
+
+    fromSelect.value = "G2";
+    toSelect.value = "G3";
+
+    function setMode(newMode) {
+      mode = newMode;
+
+      document.getElementById("rangeMode").classList.toggle("hidden", mode !== "range");
+      document.getElementById("manualMode").classList.toggle("hidden", mode !== "manual");
+    }
+
+    function startQuiz() {
+      if (mode === "range") {
+        const fromIndex = notes.indexOf(fromSelect.value);
+        const toIndex = notes.indexOf(toSelect.value);
+
+        if (fromIndex > toIndex) {
+          alert("La nota inicial debe ser más grave que la final.");
+          return;
+        }
+
+        selectedNotes = notes.slice(fromIndex, toIndex + 1);
+      } else {
+        selectedNotes = [...document.querySelectorAll("#noteCheckboxes input:checked")]
+          .map(input => input.value);
+      }
+
+      if (selectedNotes.length < 3) {
+        alert("Selecciona al menos 3 notas para poder crear opciones.");
+        return;
+      }
+
+      document.getElementById("setup").classList.add("hidden");
+      document.getElementById("quiz").classList.remove("hidden");
+
+      nextQuestion();
+    }
+
+    function nextQuestion() {
+      document.getElementById("feedback").classList.add("hidden");
+      document.getElementById("nextButton").classList.add("hidden");
+
+      currentNote = randomItem(selectedNotes);
+
+      document.getElementById("questionTitle").textContent = `Pregunta ${questionNumber}`;
+
+      const options = generateOptions(currentNote);
+      const optionsDiv = document.getElementById("options");
+
+      optionsDiv.innerHTML = "";
+
+      options.forEach(note => {
+        const button = document.createElement("button");
+        button.textContent = note;
+        button.onclick = () => checkAnswer(note);
+        optionsDiv.appendChild(button);
+      });
+
+      questionNumber++;
+    }
+
+    function generateOptions(correctNote) {
+      const wrongNotes = selectedNotes.filter(note => note !== correctNote);
+      shuffle(wrongNotes);
+
+      const options = [correctNote, wrongNotes[0], wrongNotes[1]];
+      return shuffle(options);
+    }
+
+    function checkAnswer(answer) {
+      const feedback = document.getElementById("feedback");
+      feedback.classList.remove("hidden");
+
+      if (answer === currentNote) {
+        feedback.innerHTML = `
+          <strong>Correcto.</strong><br>
+          Era ${currentNote}.
+        `;
+      } else {
+        feedback.innerHTML = `
+          <strong>Incorrecto.</strong><br>
+          La respuesta correcta era <strong>${currentNote}</strong>.<br><br>
+          ${getExplanation(currentNote)}
+        `;
+      }
+
+      document.getElementById("nextButton").classList.remove("hidden");
+    }
+
+    function getExplanation(note) {
+      if (explanations[note]) return explanations[note];
+
+      const octave = note.match(/\d/)[0];
+
+      if (octave <= 1) {
+        return `${note} está en un registro muy grave del bajo. Suele sentirse profunda, oscura y con mucho peso.`;
+      }
+
+      if (octave == 2) {
+        return `${note} está en un registro grave-medio. Tiene cuerpo, pero ya se distingue con más claridad que las notas más bajas.`;
+      }
+
+      if (octave == 3) {
+        return `${note} está en un registro medio. Suena más clara, definida y melódica.`;
+      }
+
+      return `${note} está en un registro agudo del bajo. Suena brillante, ligera y muy definida.`;
+    }
+
+    function playCurrentNote() {
+      playNote(currentNote);
+    }
+
+    async function playNote(note) {
+      if (!note) return;
+
+      await Tone.start();
+      getBassSynth().triggerAttackRelease(note, "2n");
+    }
+
+    function getBassSynth() {
+      if (bassSynth) return bassSynth;
+
+      bassSynth = new Tone.MonoSynth({
+        oscillator: {
+          type: "fatsawtooth",
+          count: 2,
+          spread: 12
+        },
+        envelope: {
+          attack: 0.015,
+          decay: 0.18,
+          sustain: 0.45,
+          release: 0.9
+        },
+        filter: {
+          type: "lowpass",
+          frequency: 900,
+          Q: 1.5
+        },
+        filterEnvelope: {
+          attack: 0.01,
+          decay: 0.25,
+          sustain: 0.25,
+          release: 0.8,
+          baseFrequency: 80,
+          octaves: 3.2
+        }
+      }).toDestination();
+
+      bassSynth.volume.value = -8;
+      return bassSynth;
+    }
+
+    function randomItem(array) {
+      return array[Math.floor(Math.random() * array.length)];
+    }
+
+    function shuffle(array) {
+      return array.sort(() => Math.random() - 0.5);
+    }
+  </script>
+</body>
+</html>
