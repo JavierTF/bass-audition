@@ -26,7 +26,7 @@
       text-align: center;
     }
 
-    button, select {
+    button, select, input, textarea {
       font-size: 16px;
       padding: 10px 14px;
       border-radius: 10px;
@@ -56,6 +56,40 @@
       padding: 8px;
       border-radius: 8px;
       text-align: center;
+    }
+
+    input, textarea, select {
+      background: #111827;
+      color: white;
+    }
+
+    textarea {
+      box-sizing: border-box;
+      min-height: 84px;
+      resize: vertical;
+      width: 100%;
+    }
+
+    .config-panel {
+      background: #374151;
+      border-radius: 12px;
+      margin-top: 24px;
+      padding: 16px;
+    }
+
+    .config-row {
+      margin-bottom: 12px;
+    }
+
+    .config-row label {
+      display: block;
+      margin: 0 0 6px;
+      text-align: left;
+    }
+
+    .config-status {
+      color: #bfdbfe;
+      min-height: 24px;
     }
 
     .options button {
@@ -112,6 +146,29 @@
         <div id="noteCheckboxes" class="note-grid"></div>
       </div>
 
+      <section class="config-panel">
+        <h3>Configuración</h3>
+
+        <div class="config-row">
+          <label for="configSelectionNotes">defaultSelectionNotes</label>
+          <textarea id="configSelectionNotes" spellcheck="false"></textarea>
+        </div>
+
+        <div class="config-row">
+          <label>defaultRangeNotes</label>
+          <select id="configFromNote"></select>
+          <select id="configToNote"></select>
+        </div>
+
+        <div class="config-row">
+          <label for="configNoteDuration">noteDuration</label>
+          <input id="configNoteDuration" type="text" />
+        </div>
+
+        <button onclick="applyConfigFromForm()">Aplicar configuración</button>
+        <p id="configStatus" class="config-status"></p>
+      </section>
+
       <button onclick="startQuiz()">Empezar quiz</button>
     </section>
 
@@ -159,16 +216,25 @@
 
     const defaultConfig = {
       defaultSelectionNotes: ["G2", "A2", "B2", "F3", "G3"],
-      defaultRangeNotes: ["G2", "G3"]
+      defaultRangeNotes: ["G2", "G3"],
+      noteDuration: "1m"
     };
+    let appConfig = { ...defaultConfig };
 
     const fromSelect = document.getElementById("fromNote");
     const toSelect = document.getElementById("toNote");
     const noteCheckboxes = document.getElementById("noteCheckboxes");
+    const configSelectionNotes = document.getElementById("configSelectionNotes");
+    const configFromNote = document.getElementById("configFromNote");
+    const configToNote = document.getElementById("configToNote");
+    const configNoteDuration = document.getElementById("configNoteDuration");
+    const configStatus = document.getElementById("configStatus");
 
     notes.forEach(note => {
       fromSelect.innerHTML += `<option value="${note}">${note}</option>`;
       toSelect.innerHTML += `<option value="${note}">${note}</option>`;
+      configFromNote.innerHTML += `<option value="${note}">${note}</option>`;
+      configToNote.innerHTML += `<option value="${note}">${note}</option>`;
 
       noteCheckboxes.innerHTML += `
         <label>
@@ -197,23 +263,65 @@
     }
 
     function applyConfig(config) {
-      const [fromNote, toNote] = config.defaultRangeNotes || [];
+      appConfig = {
+        ...defaultConfig,
+        ...config
+      };
+
+      const [fromNote, toNote] = appConfig.defaultRangeNotes || [];
 
       if (notes.includes(fromNote)) {
         fromSelect.value = fromNote;
+        configFromNote.value = fromNote;
       }
 
       if (notes.includes(toNote)) {
         toSelect.value = toNote;
+        configToNote.value = toNote;
       }
 
       const selectedDefaults = new Set(
-        (config.defaultSelectionNotes || []).filter(note => notes.includes(note))
+        (appConfig.defaultSelectionNotes || []).filter(note => notes.includes(note))
       );
 
       document.querySelectorAll("#noteCheckboxes input").forEach(input => {
         input.checked = selectedDefaults.has(input.value);
       });
+
+      configSelectionNotes.value = [...selectedDefaults].join(", ");
+      configNoteDuration.value = appConfig.noteDuration;
+    }
+
+    function applyConfigFromForm() {
+      const defaultSelectionNotes = configSelectionNotes.value
+        .split(",")
+        .map(note => note.trim())
+        .filter(Boolean);
+
+      const invalidNotes = defaultSelectionNotes.filter(note => !notes.includes(note));
+
+      if (invalidNotes.length > 0) {
+        configStatus.textContent = `Notas no válidas: ${invalidNotes.join(", ")}`;
+        return;
+      }
+
+      if (notes.indexOf(configFromNote.value) > notes.indexOf(configToNote.value)) {
+        configStatus.textContent = "El rango debe ir de grave a agudo.";
+        return;
+      }
+
+      if (!configNoteDuration.value.trim()) {
+        configStatus.textContent = "noteDuration no puede estar vacío.";
+        return;
+      }
+
+      applyConfig({
+        defaultSelectionNotes,
+        defaultRangeNotes: [configFromNote.value, configToNote.value],
+        noteDuration: configNoteDuration.value.trim()
+      });
+
+      configStatus.textContent = "Configuración aplicada en esta sesión.";
     }
 
     function setMode(newMode) {
@@ -329,7 +437,7 @@
       if (!note) return;
 
       await Tone.start();
-      getBassSynth().triggerAttackRelease(note, "1n");
+      getBassSynth().triggerAttackRelease(note, appConfig.noteDuration);
     }
 
     function getBassSynth() {
