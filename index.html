@@ -167,6 +167,14 @@
         <h3>Configuración</h3>
 
         <div class="config-row">
+          <label for="configDefaultMode">defaultMode</label>
+          <select id="configDefaultMode">
+            <option value="range">Por rango</option>
+            <option value="manual">Selección manual</option>
+          </select>
+        </div>
+
+        <div class="config-row">
           <label for="configSelectionNotes">defaultSelectionNotes</label>
           <textarea id="configSelectionNotes" spellcheck="false"></textarea>
         </div>
@@ -185,6 +193,16 @@
         <div class="config-row">
           <label for="configAutoNextDelayMs">autoNextDelayMs</label>
           <input id="configAutoNextDelayMs" type="number" min="0" step="100" />
+        </div>
+
+        <div class="config-row">
+          <label for="configInstrument">instrument</label>
+          <select id="configInstrument">
+            <option value="synth">Sintetizador</option>
+            <option value="piano">Piano</option>
+            <option value="bass">Bajo</option>
+            <option value="guitar">Guitarra</option>
+          </select>
         </div>
 
         <button onclick="applyConfigFromForm()">Aplicar configuración</button>
@@ -235,25 +253,30 @@
     let selectedNotes = [];
     let currentNote = null;
     let questionNumber = 1;
-    let bassSynth = null;
+    let instrumentSynth = null;
+    let currentInstrument = null;
     let nextQuestionTimeout = null;
 
     const defaultConfig = {
+      defaultMode: "manual",
       defaultSelectionNotes: ["G2", "A2", "B2", "F3", "G3"],
       defaultRangeNotes: ["G2", "G3"],
       noteDuration: "1m",
-      autoNextDelayMs: 800
+      autoNextDelayMs: 800,
+      instrument: "bass"
     };
     let appConfig = { ...defaultConfig };
 
     const fromSelect = document.getElementById("fromNote");
     const toSelect = document.getElementById("toNote");
     const noteCheckboxes = document.getElementById("noteCheckboxes");
+    const configDefaultMode = document.getElementById("configDefaultMode");
     const configSelectionNotes = document.getElementById("configSelectionNotes");
     const configFromNote = document.getElementById("configFromNote");
     const configToNote = document.getElementById("configToNote");
     const configNoteDuration = document.getElementById("configNoteDuration");
     const configAutoNextDelayMs = document.getElementById("configAutoNextDelayMs");
+    const configInstrument = document.getElementById("configInstrument");
     const configStatus = document.getElementById("configStatus");
 
     notes.forEach(note => {
@@ -294,6 +317,11 @@
         ...config
       };
 
+      if (["range", "manual"].includes(appConfig.defaultMode)) {
+        setMode(appConfig.defaultMode);
+        configDefaultMode.value = appConfig.defaultMode;
+      }
+
       const [fromNote, toNote] = appConfig.defaultRangeNotes || [];
 
       if (notes.includes(fromNote)) {
@@ -317,6 +345,7 @@
       configSelectionNotes.value = [...selectedDefaults].join(", ");
       configNoteDuration.value = appConfig.noteDuration;
       configAutoNextDelayMs.value = appConfig.autoNextDelayMs;
+      configInstrument.value = appConfig.instrument;
     }
 
     function applyConfigFromForm() {
@@ -349,11 +378,22 @@
         return;
       }
 
+      if (!["synth", "piano", "bass", "guitar"].includes(configInstrument.value)) {
+        configStatus.textContent = "Selecciona un instrumento válido.";
+        return;
+      }
+
+      if (configInstrument.value !== appConfig.instrument) {
+        resetInstrument();
+      }
+
       applyConfig({
+        defaultMode: configDefaultMode.value,
         defaultSelectionNotes,
         defaultRangeNotes: [configFromNote.value, configToNote.value],
         noteDuration: configNoteDuration.value.trim(),
-        autoNextDelayMs
+        autoNextDelayMs,
+        instrument: configInstrument.value
       });
 
       configStatus.textContent = "Configuración aplicada en esta sesión.";
@@ -361,6 +401,7 @@
 
     function setMode(newMode) {
       mode = newMode;
+      configDefaultMode.value = mode;
 
       document.getElementById("rangeMode").classList.toggle("hidden", mode !== "range");
       document.getElementById("manualMode").classList.toggle("hidden", mode !== "manual");
@@ -495,41 +536,116 @@
       if (!note) return;
 
       await Tone.start();
-      getBassSynth().triggerAttackRelease(note, appConfig.noteDuration);
+      getInstrument().triggerAttackRelease(note, appConfig.noteDuration);
     }
 
-    function getBassSynth() {
-      if (bassSynth) return bassSynth;
+    function getInstrument() {
+      if (instrumentSynth && currentInstrument === appConfig.instrument) {
+        return instrumentSynth;
+      }
 
-      bassSynth = new Tone.MonoSynth({
-        oscillator: {
-          type: "fatsawtooth",
-          count: 2,
-          spread: 12
-        },
-        envelope: {
-          attack: 0.015,
-          decay: 0.18,
-          sustain: 0.45,
-          release: 1.2
-        },
-        filter: {
-          type: "lowpass",
-          frequency: 900,
-          Q: 1.5
-        },
-        filterEnvelope: {
-          attack: 0.01,
-          decay: 0.25,
-          sustain: 0.25,
-          release: 1.1,
-          baseFrequency: 80,
-          octaves: 3.2
-        }
-      }).toDestination();
+      resetInstrument();
+      currentInstrument = appConfig.instrument;
 
-      bassSynth.volume.value = -8;
-      return bassSynth;
+      if (appConfig.instrument === "synth") {
+        instrumentSynth = new Tone.Synth({
+          oscillator: {
+            type: "triangle"
+          },
+          envelope: {
+            attack: 0.02,
+            decay: 0.2,
+            sustain: 0.55,
+            release: 1.1
+          }
+        }).toDestination();
+        instrumentSynth.volume.value = -10;
+      }
+
+      if (appConfig.instrument === "piano") {
+        instrumentSynth = new Tone.PolySynth(Tone.Synth, {
+          oscillator: {
+            type: "sine"
+          },
+          envelope: {
+            attack: 0.01,
+            decay: 0.35,
+            sustain: 0.25,
+            release: 1.4
+          }
+        }).toDestination();
+        instrumentSynth.volume.value = -8;
+      }
+
+      if (appConfig.instrument === "bass") {
+        instrumentSynth = new Tone.MonoSynth({
+          oscillator: {
+            type: "fatsawtooth",
+            count: 2,
+            spread: 12
+          },
+          envelope: {
+            attack: 0.015,
+            decay: 0.18,
+            sustain: 0.45,
+            release: 1.2
+          },
+          filter: {
+            type: "lowpass",
+            frequency: 900,
+            Q: 1.5
+          },
+          filterEnvelope: {
+            attack: 0.01,
+            decay: 0.25,
+            sustain: 0.25,
+            release: 1.1,
+            baseFrequency: 80,
+            octaves: 3.2
+          }
+        }).toDestination();
+        instrumentSynth.volume.value = -8;
+      }
+
+      if (appConfig.instrument === "guitar") {
+        instrumentSynth = new Tone.MonoSynth({
+          oscillator: {
+            type: "pulse",
+            width: 0.35
+          },
+          envelope: {
+            attack: 0.005,
+            decay: 0.22,
+            sustain: 0.18,
+            release: 0.9
+          },
+          filter: {
+            type: "bandpass",
+            frequency: 1600,
+            Q: 2
+          },
+          filterEnvelope: {
+            attack: 0.01,
+            decay: 0.18,
+            sustain: 0.2,
+            release: 0.7,
+            baseFrequency: 220,
+            octaves: 2.5
+          }
+        }).toDestination();
+        instrumentSynth.volume.value = -9;
+      }
+
+      return instrumentSynth;
+    }
+
+    function resetInstrument() {
+      if (instrumentSynth) {
+        instrumentSynth.dispose();
+      }
+
+      instrumentSynth = null;
+      currentInstrument = null;
     }
 
     function randomItem(array) {
