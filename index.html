@@ -206,6 +206,7 @@
       <div id="feedback" class="feedback hidden"></div>
 
       <div style="text-align:center;">
+        <button id="retryButton" class="hidden" onclick="retryQuestion()">Repetir</button>
         <button id="nextButton" class="hidden" onclick="nextQuestion()">Siguiente</button>
       </div>
     </section>
@@ -395,6 +396,7 @@
     function nextQuestion() {
       clearTimeout(nextQuestionTimeout);
       document.getElementById("feedback").classList.add("hidden");
+      document.getElementById("retryButton").classList.add("hidden");
       document.getElementById("nextButton").classList.add("hidden");
 
       currentNote = randomItem(selectedNotes);
@@ -447,8 +449,22 @@
           ${getExplanation(currentNote)}
         `;
 
+        document.getElementById("retryButton").classList.remove("hidden");
         document.getElementById("nextButton").classList.remove("hidden");
       }
+    }
+
+    function retryQuestion() {
+      document.getElementById("feedback").classList.add("hidden");
+      document.getElementById("retryButton").classList.add("hidden");
+      document.getElementById("nextButton").classList.add("hidden");
+
+      document.querySelectorAll("#options button").forEach(button => {
+        button.disabled = false;
+        button.classList.remove("correct", "incorrect");
+      });
+
+      playCurrentNote();
     }
 
     function getExplanation(note) {
