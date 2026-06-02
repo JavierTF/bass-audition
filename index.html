@@ -135,6 +135,13 @@
       display: block;
       margin: 24px auto;
     }
+
+    .sing-note {
+      font-size: 48px;
+      font-weight: 700;
+      min-height: 64px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -143,6 +150,11 @@
 
     <section id="setup">
       <h2>Configurar práctica</h2>
+
+      <p>Escoge el modo de práctica:</p>
+
+      <button onclick="setPracticeMode('quiz')">Quiz auditivo</button>
+      <button onclick="setPracticeMode('sing')">Cantar notas</button>
 
       <p>Escoge cómo quieres seleccionar las notas:</p>
 
@@ -209,7 +221,7 @@
         <p id="configStatus" class="config-status"></p>
       </section>
 
-      <button onclick="startQuiz()">Empezar quiz</button>
+      <button onclick="startQuiz()">Empezar práctica</button>
     </section>
 
     <section id="quiz" class="hidden">
@@ -226,6 +238,20 @@
       <div style="text-align:center;">
         <button id="retryButton" class="hidden" onclick="retryQuestion()">Repetir</button>
         <button id="nextButton" class="hidden" onclick="nextQuestion()">Siguiente</button>
+      </div>
+    </section>
+
+    <section id="sing" class="hidden">
+      <h2 id="singQuestionTitle">Cantar nota</h2>
+
+      <p style="text-align:center;">Canta la nota antes de revelarla.</p>
+
+      <div id="singNoteDisplay" class="sing-note">?</div>
+
+      <div style="text-align:center;">
+        <button id="revealSingNoteButton" onclick="revealSingNote()">Ver nota</button>
+        <button id="playSingNoteButton" class="hidden" onclick="playCurrentNote()">▶</button>
+        <button id="nextSingButton" class="hidden" onclick="nextSingQuestion()">Siguiente</button>
       </div>
     </section>
   </div>
@@ -250,6 +276,7 @@
     };
 
     let mode = "range";
+    let practiceMode = "quiz";
     let selectedNotes = [];
     let currentNote = null;
     let questionNumber = 1;
@@ -407,31 +434,49 @@
       document.getElementById("manualMode").classList.toggle("hidden", mode !== "manual");
     }
 
+    function setPracticeMode(newPracticeMode) {
+      practiceMode = newPracticeMode;
+    }
+
     function startQuiz() {
+      selectedNotes = getSelectedNotes();
+
+      if (practiceMode === "quiz" && selectedNotes.length < 3) {
+        alert("Selecciona al menos 3 notas para poder crear opciones.");
+        return;
+      }
+
+      if (practiceMode === "sing" && selectedNotes.length < 1) {
+        alert("Selecciona al menos 1 nota para practicar canto.");
+        return;
+      }
+
+      document.getElementById("setup").classList.add("hidden");
+      document.getElementById("quiz").classList.toggle("hidden", practiceMode !== "quiz");
+      document.getElementById("sing").classList.toggle("hidden", practiceMode !== "sing");
+
+      if (practiceMode === "quiz") {
+        nextQuestion();
+      } else {
+        nextSingQuestion();
+      }
+    }
+
+    function getSelectedNotes() {
       if (mode === "range") {
         const fromIndex = notes.indexOf(fromSelect.value);
         const toIndex = notes.indexOf(toSelect.value);
 
         if (fromIndex > toIndex) {
           alert("La nota inicial debe ser más grave que la final.");
-          return;
+          return [];
         }
 
-        selectedNotes = notes.slice(fromIndex, toIndex + 1);
-      } else {
-        selectedNotes = [...document.querySelectorAll("#noteCheckboxes input:checked")]
-          .map(input => input.value);
+        return notes.slice(fromIndex, toIndex + 1);
       }
 
-      if (selectedNotes.length < 3) {
-        alert("Selecciona al menos 3 notas para poder crear opciones.");
-        return;
-      }
-
-      document.getElementById("setup").classList.add("hidden");
-      document.getElementById("quiz").classList.remove("hidden");
-
-      nextQuestion();
+      return [...document.querySelectorAll("#noteCheckboxes input:checked")]
+        .map(input => input.value);
     }
 
     function nextQuestion() {
@@ -457,6 +502,27 @@
       });
 
       questionNumber++;
+    }
+
+    function nextSingQuestion() {
+      currentNote = randomItem(selectedNotes);
+
+      document.getElementById("singQuestionTitle").textContent = `Cantar nota ${questionNumber}`;
+      document.getElementById("singNoteDisplay").textContent = "?";
+      document.getElementById("revealSingNoteButton").classList.remove("hidden");
+      document.getElementById("playSingNoteButton").classList.add("hidden");
+      document.getElementById("nextSingButton").classList.add("hidden");
+
+      questionNumber++;
+    }
+
+    function revealSingNote() {
+      document.getElementById("singNoteDisplay").textContent = currentNote;
+      document.getElementById("revealSingNoteButton").classList.add("hidden");
+      document.getElementById("playSingNoteButton").classList.remove("hidden");
+      document.getElementById("nextSingButton").classList.remove("hidden");
+
+      playCurrentNote();
     }
 
     function generateOptions(correctNote) {
