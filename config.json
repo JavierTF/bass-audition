@@ -1,5 +1,6 @@
 {
   "defaultSelectionNotes": ["G2", "A2", "B2", "F3", "G3"],
   "defaultRangeNotes": ["G2", "G3"],
-  "noteDuration": "1m"
+  "noteDuration": "1m",
+  "autoNextDelayMs": 800
 }
