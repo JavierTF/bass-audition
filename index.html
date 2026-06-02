@@ -244,14 +244,11 @@
     <section id="sing" class="hidden">
       <h2 id="singQuestionTitle">Cantar nota</h2>
 
-      <p style="text-align:center;">Canta la nota antes de revelarla.</p>
-
-      <div id="singNoteDisplay" class="sing-note">?</div>
+      <div id="singNoteDisplay" class="sing-note"></div>
 
       <div style="text-align:center;">
-        <button id="revealSingNoteButton" onclick="revealSingNote()">Ver nota</button>
-        <button id="playSingNoteButton" class="hidden" onclick="playCurrentNote()">▶</button>
-        <button id="nextSingButton" class="hidden" onclick="nextSingQuestion()">Siguiente</button>
+        <button onclick="playCurrentNote()">Reproducir</button>
+        <button onclick="nextSingQuestion()">Siguiente</button>
       </div>
     </section>
   </div>
@@ -508,21 +505,9 @@
       currentNote = randomItem(selectedNotes);
 
       document.getElementById("singQuestionTitle").textContent = `Cantar nota ${questionNumber}`;
-      document.getElementById("singNoteDisplay").textContent = "?";
-      document.getElementById("revealSingNoteButton").classList.remove("hidden");
-      document.getElementById("playSingNoteButton").classList.add("hidden");
-      document.getElementById("nextSingButton").classList.add("hidden");
+      document.getElementById("singNoteDisplay").textContent = currentNote;
 
       questionNumber++;
-    }
-
-    function revealSingNote() {
-      document.getElementById("singNoteDisplay").textContent = currentNote;
-      document.getElementById("revealSingNoteButton").classList.add("hidden");
-      document.getElementById("playSingNoteButton").classList.remove("hidden");
-      document.getElementById("nextSingButton").classList.remove("hidden");
-
-      playCurrentNote();
     }
 
     function generateOptions(correctNote) {
