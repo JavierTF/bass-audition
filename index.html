@@ -142,6 +142,16 @@
       min-height: 64px;
       text-align: center;
     }
+
+    .flash-note {
+      align-items: center;
+      display: flex;
+      font-size: clamp(96px, 28vw, 180px);
+      font-weight: 800;
+      justify-content: center;
+      min-height: 260px;
+      text-align: center;
+    }
   </style>
 </head>
 <body>
@@ -155,7 +165,9 @@
 
       <button onclick="setPracticeMode('quiz')">Quiz auditivo</button>
       <button onclick="setPracticeMode('sing')">Cantar notas</button>
+      <button onclick="setPracticeMode('flash')">Ráfaga de notas</button>
 
+      <div id="pitchedNoteSetup">
       <p>Escoge cómo quieres seleccionar las notas:</p>
 
       <button onclick="setMode('range')">Por rango</button>
@@ -174,8 +186,17 @@
         <h3>Seleccionar notas manualmente</h3>
         <div id="noteCheckboxes" class="note-grid"></div>
       </div>
+      </div>
 
-      <section class="config-panel">
+      <div id="flashSetup" class="hidden">
+        <h3>Configurar ráfaga</h3>
+        <p>Selecciona las notas que quieres practicar:</p>
+        <div id="flashNoteCheckboxes" class="note-grid"></div>
+        <label for="flashDuration">Tiempo por nota (segundos):</label>
+        <input id="flashDuration" type="number" min="0.2" step="0.1" value="2" />
+      </div>
+
+      <section id="globalConfig" class="config-panel">
         <h3>Configuración</h3>
 
         <div class="config-row">
@@ -251,6 +272,14 @@
         <button onclick="nextSingQuestion()">Siguiente</button>
       </div>
     </section>
+
+    <section id="flash" class="hidden">
+      <h2>Ráfaga de notas</h2>
+      <div id="flashNoteDisplay" class="flash-note"></div>
+      <div style="text-align:center;">
+        <button onclick="stopFlashPractice()">Terminar</button>
+      </div>
+    </section>
   </div>
 
   <script>
@@ -260,6 +289,8 @@
       "B2","C3","C#3","D3","D#3","E3","F3","F#3","G3","G#3","A3","A#3",
       "B3","C4","C#4","D4","D#4","E4","F4","F#4","G4"
     ];
+    const flashNotes = ["A", "A#", "B", "C", "C#", "D", "D#", "E", "F", "F#", "G", "G#"];
+    const naturalFlashNotes = new Set(["A", "B", "C", "D", "E", "F", "G"]);
 
     const explanations = {
       "B0": "B0 es la nota más grave típica de un bajo de 5 cuerdas. Suena muy profunda, pesada y oscura.",
@@ -280,6 +311,8 @@
     let instrumentSynth = null;
     let currentInstrument = null;
     let nextQuestionTimeout = null;
+    let flashTimeout = null;
+    let flashDurationMs = 2000;
 
     const defaultConfig = {
       defaultMode: "manual",
@@ -302,6 +335,8 @@
     const configAutoNextDelayMs = document.getElementById("configAutoNextDelayMs");
     const configInstrument = document.getElementById("configInstrument");
     const configStatus = document.getElementById("configStatus");
+    const flashNoteCheckboxes = document.getElementById("flashNoteCheckboxes");
+    const flashDuration = document.getElementById("flashDuration");
 
     notes.forEach(note => {
       fromSelect.innerHTML += `<option value="${note}">${note}</option>`;
@@ -312,6 +347,15 @@
       noteCheckboxes.innerHTML += `
         <label>
           <input type="checkbox" value="${note}" />
+          ${note}
+        </label>
+      `;
+    });
+
+    flashNotes.forEach(note => {
+      flashNoteCheckboxes.innerHTML += `
+        <label>
+          <input type="checkbox" value="${note}" checked />
           ${note}
         </label>
       `;
@@ -433,10 +477,39 @@
 
     function setPracticeMode(newPracticeMode) {
       practiceMode = newPracticeMode;
+
+      const isFlashMode = practiceMode === "flash";
+      document.getElementById("pitchedNoteSetup").classList.toggle("hidden", isFlashMode);
+      document.getElementById("flashSetup").classList.toggle("hidden", !isFlashMode);
+      document.getElementById("globalConfig").classList.toggle("hidden", isFlashMode);
+
+      if (isFlashMode) {
+        document.querySelectorAll("#flashNoteCheckboxes input").forEach(input => {
+          input.checked = naturalFlashNotes.has(input.value);
+        });
+      }
     }
 
     function startQuiz() {
-      selectedNotes = getSelectedNotes();
+      if (practiceMode === "flash") {
+        selectedNotes = [...document.querySelectorAll("#flashNoteCheckboxes input:checked")]
+          .map(input => input.value);
+        const secondsPerNote = Number(flashDuration.value);
+
+        if (selectedNotes.length < 1) {
+          alert("Selecciona al menos 1 nota para la ráfaga.");
+          return;
+        }
+
+        if (!Number.isFinite(secondsPerNote) || secondsPerNote < 0.2) {
+          alert("El tiempo por nota debe ser de al menos 0,2 segundos.");
+          return;
+        }
+
+        flashDurationMs = secondsPerNote * 1000;
+      } else {
+        selectedNotes = getSelectedNotes();
+      }
 
       if (practiceMode === "quiz" && selectedNotes.length < 3) {
         alert("Selecciona al menos 3 notas para poder crear opciones.");
@@ -451,12 +524,33 @@
       document.getElementById("setup").classList.add("hidden");
       document.getElementById("quiz").classList.toggle("hidden", practiceMode !== "quiz");
       document.getElementById("sing").classList.toggle("hidden", practiceMode !== "sing");
+      document.getElementById("flash").classList.toggle("hidden", practiceMode !== "flash");
 
       if (practiceMode === "quiz") {
         nextQuestion();
-      } else {
+      } else if (practiceMode === "sing") {
         nextSingQuestion();
+      } else {
+        nextFlashNote();
       }
+    }
+
+    function nextFlashNote() {
+      clearTimeout(flashTimeout);
+      const availableNotes = selectedNotes.length > 1
+        ? selectedNotes.filter(note => note !== currentNote)
+        : selectedNotes;
+
+      currentNote = randomItem(availableNotes);
+      document.getElementById("flashNoteDisplay").textContent = currentNote;
+      flashTimeout = setTimeout(nextFlashNote, flashDurationMs);
+    }
+
+    function stopFlashPractice() {
+      clearTimeout(flashTimeout);
+      currentNote = null;
+      document.getElementById("flash").classList.add("hidden");
+      document.getElementById("setup").classList.remove("hidden");
     }
 
     function getSelectedNotes() {
